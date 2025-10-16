@@ -1,6 +1,6 @@
 # app/streamlit_app.py
 # Streamlit Web Application for Credit Card Fraud Detection
-# FIXED VERSION - Works properly with error handling
+# UPDATED VERSION - Downloads dataset from Google Drive
 
 import streamlit as st
 import pandas as pd
@@ -12,6 +12,7 @@ from sklearn.preprocessing import StandardScaler
 import os
 import sys
 from pathlib import Path
+import gdown
 
 # ============================================================================
 # PAGE CONFIGURATION - MUST BE FIRST STREAMLIT COMMAND
@@ -50,6 +51,57 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
+# DATASET DOWNLOAD FUNCTIONS
+# ============================================================================
+
+@st.cache_data(show_spinner=False)
+def download_dataset_from_gdrive():
+    """Download dataset from Google Drive if not already downloaded"""
+    # Google Drive file ID from your link
+    file_id = "1AG5hIl5jABNe2Kq6mHVh0_a0N5czO6Kg"
+    output_path = "creditcard.csv"
+    
+    # Check if file already exists
+    if os.path.exists(output_path):
+        file_size = os.path.getsize(output_path)
+        if file_size > 1000000:  # If file is larger than 1MB, assume it's valid
+            return output_path, True
+    
+    try:
+        # Download from Google Drive
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, output_path, quiet=False)
+        
+        if os.path.exists(output_path):
+            return output_path, True
+        else:
+            return None, False
+            
+    except Exception as e:
+        print(f"Error downloading dataset: {str(e)}")
+        return None, False
+
+@st.cache_data(show_spinner=False)
+def load_dataset():
+    """Load the credit card dataset"""
+    dataset_path, success = download_dataset_from_gdrive()
+    
+    if not success or dataset_path is None:
+        return None, False
+    
+    try:
+        # Read CSV with optimization for large files
+        df = pd.read_csv(
+            dataset_path,
+            engine='c',  # Faster C engine
+            low_memory=True
+        )
+        return df, True
+    except Exception as e:
+        print(f"Error loading dataset: {str(e)}")
+        return None, False
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -60,7 +112,8 @@ def get_model_path():
         'model/fraud_model.pkl',
         '../model/fraud_model.pkl',
         Path(__file__).parent.parent / 'model' / 'fraud_model.pkl',
-        'fraud_detection/model/fraud_model.pkl'
+        'fraud_detection/model/fraud_model.pkl',
+        'fraud_model.pkl'
     ]
     
     for path in possible_paths:
@@ -76,7 +129,8 @@ def get_scaler_path():
         'model/scaler.pkl',
         '../model/scaler.pkl',
         Path(__file__).parent.parent / 'model' / 'scaler.pkl',
-        'fraud_detection/model/scaler.pkl'
+        'fraud_detection/model/scaler.pkl',
+        'scaler.pkl'
     ]
     
     for path in possible_paths:
@@ -96,8 +150,8 @@ def validate_csv_structure(df):
     if missing_columns:
         return False, f"Missing columns: {', '.join(missing_columns)}"
     
-    if len(df.columns) != 30:
-        return False, f"Expected 30 columns, found {len(df.columns)}"
+    if len(df.columns) < 30:
+        return False, f"Expected at least 30 columns, found {len(df.columns)}"
     
     return True, "CSV structure is valid"
 
@@ -154,7 +208,7 @@ model, scaler, models_loaded = load_models()
 st.sidebar.title("🔍 Navigation")
 page = st.sidebar.radio(
     "Select a page:", 
-    ["Home", "Single Transaction", "Batch Analysis", "Model Info"]
+    ["Home", "Dataset Explorer", "Single Transaction", "Batch Analysis", "Model Info"]
 )
 
 # ============================================================================
@@ -166,10 +220,22 @@ if page == "Home":
     st.markdown("---")
     
     # Status check
-    if not models_loaded:
-        st.error("⚠️ Models not loaded! Please ensure model files are in the correct location.")
-    else:
-        st.success("✅ Models loaded successfully!")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if not models_loaded:
+            st.error("⚠️ Models not loaded! Please ensure model files are in the correct location.")
+        else:
+            st.success("✅ Models loaded successfully!")
+    
+    with col2:
+        # Check dataset status
+        with st.spinner("Checking dataset..."):
+            dataset, dataset_loaded = load_dataset()
+            if dataset_loaded:
+                st.success(f"✅ Dataset loaded! ({len(dataset):,} transactions)")
+            else:
+                st.warning("⚠️ Dataset not loaded. Will download when needed.")
     
     col1, col2 = st.columns(2)
     
@@ -180,6 +246,7 @@ if page == "Home":
         in real-time with high accuracy.
         
         **Key Features:**
+        - 🔍 Dataset exploration and visualization
         - 🎯 Single transaction fraud detection
         - 📈 Batch transaction analysis
         - 📊 Model performance metrics
@@ -210,26 +277,162 @@ if page == "Home":
     
     st.header("🚀 How to Use")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.subheader("1️⃣ Single Transaction")
-        st.write("Check if a single transaction is fraudulent by entering details")
+        st.subheader("1️⃣ Dataset Explorer")
+        st.write("Explore and visualize the credit card dataset")
     
     with col2:
-        st.subheader("2️⃣ Batch Analysis")
-        st.write("Upload a CSV file with multiple transactions for analysis")
+        st.subheader("2️⃣ Single Transaction")
+        st.write("Check if a single transaction is fraudulent")
     
     with col3:
-        st.subheader("3️⃣ Model Info")
-        st.write("View detailed model information and performance metrics")
+        st.subheader("3️⃣ Batch Analysis")
+        st.write("Upload CSV file for multiple transactions")
+    
+    with col4:
+        st.subheader("4️⃣ Model Info")
+        st.write("View detailed model metrics")
     
     # Footer
     st.markdown("---")
     st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
 
 # ============================================================================
-# PAGE 2: SINGLE TRANSACTION PREDICTION
+# PAGE 2: DATASET EXPLORER
+# ============================================================================
+
+elif page == "Dataset Explorer":
+    st.title("🔍 Credit Card Dataset Explorer")
+    st.markdown("---")
+    
+    with st.spinner("Loading dataset from Google Drive..."):
+        dataset, dataset_loaded = load_dataset()
+    
+    if not dataset_loaded or dataset is None:
+        st.error("❌ Failed to load dataset. Please check your internet connection and try again.")
+        st.info("The dataset will be automatically downloaded from Google Drive on first use.")
+    else:
+        st.success(f"✅ Dataset loaded successfully! Total transactions: {len(dataset):,}")
+        
+        # Dataset Overview
+        st.header("📊 Dataset Overview")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        fraud_count = dataset['Class'].sum()
+        genuine_count = len(dataset) - fraud_count
+        fraud_percentage = (fraud_count / len(dataset)) * 100
+        
+        with col1:
+            st.metric("Total Transactions", f"{len(dataset):,}")
+        
+        with col2:
+            st.metric("Fraudulent", f"{fraud_count:,}", delta=f"{fraud_percentage:.3f}%")
+        
+        with col3:
+            st.metric("Genuine", f"{genuine_count:,}")
+        
+        with col4:
+            avg_amount = dataset['Amount'].mean()
+            st.metric("Avg Amount", f"${avg_amount:.2f}")
+        
+        # Display sample data
+        st.markdown("---")
+        st.subheader("📋 Sample Transactions")
+        
+        show_frauds = st.checkbox("Show only fraudulent transactions")
+        
+        if show_frauds:
+            display_df = dataset[dataset['Class'] == 1].head(10)
+        else:
+            display_df = dataset.head(10)
+        
+        st.dataframe(display_df, use_container_width=True)
+        
+        # Visualizations
+        st.markdown("---")
+        st.subheader("📈 Data Visualizations")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Class distribution
+            fig, ax = plt.subplots(figsize=(8, 6))
+            counts = [genuine_count, fraud_count]
+            labels = ['Genuine', 'Fraudulent']
+            colors = ['#09ab3b', '#d73449']
+            
+            ax.pie(counts, labels=labels, autopct='%1.3f%%', colors=colors,
+                  startangle=90, textprops={'fontsize': 11, 'weight': 'bold'})
+            ax.set_title('Transaction Class Distribution', fontsize=12, fontweight='bold')
+            st.pyplot(fig)
+        
+        with col2:
+            # Amount distribution
+            fig, ax = plt.subplots(figsize=(8, 6))
+            
+            # Sample data for better performance
+            sample_size = min(10000, len(dataset))
+            sample_data = dataset.sample(n=sample_size, random_state=42)
+            
+            genuine_amounts = sample_data[sample_data['Class'] == 0]['Amount']
+            fraud_amounts = sample_data[sample_data['Class'] == 1]['Amount']
+            
+            ax.hist(genuine_amounts, bins=50, alpha=0.6, label='Genuine', color='#09ab3b', edgecolor='black')
+            ax.hist(fraud_amounts, bins=50, alpha=0.6, label='Fraud', color='#d73449', edgecolor='black')
+            ax.set_xlabel('Transaction Amount ($)', fontsize=11)
+            ax.set_ylabel('Frequency', fontsize=11)
+            ax.set_title('Transaction Amount Distribution', fontsize=12, fontweight='bold')
+            ax.legend()
+            ax.set_xlim([0, 500])  # Focus on lower amounts for better visibility
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        # Statistics
+        st.markdown("---")
+        st.subheader("📊 Statistical Summary")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Genuine Transactions:**")
+            genuine_stats = dataset[dataset['Class'] == 0]['Amount'].describe()
+            st.dataframe(genuine_stats, use_container_width=True)
+        
+        with col2:
+            st.write("**Fraudulent Transactions:**")
+            fraud_stats = dataset[dataset['Class'] == 1]['Amount'].describe()
+            st.dataframe(fraud_stats, use_container_width=True)
+        
+        # Time analysis
+        st.markdown("---")
+        st.subheader("⏰ Time Distribution")
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Sample for performance
+        sample_data = dataset.sample(n=min(50000, len(dataset)), random_state=42)
+        
+        genuine_time = sample_data[sample_data['Class'] == 0]['Time']
+        fraud_time = sample_data[sample_data['Class'] == 1]['Time']
+        
+        ax.hist(genuine_time, bins=50, alpha=0.5, label='Genuine', color='#09ab3b')
+        ax.hist(fraud_time, bins=50, alpha=0.7, label='Fraud', color='#d73449')
+        ax.set_xlabel('Time (seconds)', fontsize=11)
+        ax.set_ylabel('Number of Transactions', fontsize=11)
+        ax.set_title('Transaction Time Distribution', fontsize=12, fontweight='bold')
+        ax.legend()
+        plt.tight_layout()
+        st.pyplot(fig)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
+
+# ============================================================================
+# PAGE 3: SINGLE TRANSACTION PREDICTION
 # ============================================================================
 
 elif page == "Single Transaction":
@@ -274,6 +477,7 @@ elif page == "Single Transaction":
             for i in range(1, 29):
                 col_idx = (i - 1) % 4
                 with cols[col_idx]:
+                    st.caption(f"V{i}")
                     v_features[f'V{i}'] = st.slider(
                         f"V{i}", 
                         -5.0, 
@@ -352,7 +556,7 @@ elif page == "Single Transaction":
     st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
 
 # ============================================================================
-# PAGE 3: BATCH ANALYSIS
+# PAGE 4: BATCH ANALYSIS
 # ============================================================================
 
 elif page == "Batch Analysis":
@@ -509,7 +713,7 @@ elif page == "Batch Analysis":
     st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
 
 # ============================================================================
-# PAGE 4: MODEL INFORMATION
+# PAGE 5: MODEL INFORMATION
 # ============================================================================
 
 elif page == "Model Info":
