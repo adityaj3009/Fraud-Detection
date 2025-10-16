@@ -1,7 +1,3 @@
-# app/streamlit_app.py
-# Streamlit Web Application for Credit Card Fraud Detection
-# UPDATED VERSION - Downloads dataset from Google Drive
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -14,10 +10,6 @@ import sys
 from pathlib import Path
 import gdown
 
-# ============================================================================
-# PAGE CONFIGURATION - MUST BE FIRST STREAMLIT COMMAND
-# ============================================================================
-
 st.set_page_config(
     page_title="Credit Card Fraud Detector",
     page_icon="💳",
@@ -25,9 +17,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============================================================================
-# CUSTOM CSS
-# ============================================================================
 
 st.markdown("""
 <style>
@@ -49,10 +38,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# ============================================================================
-# DATASET DOWNLOAD FUNCTIONS
-# ============================================================================
 
 @st.cache_data(show_spinner=False)
 def download_dataset_from_gdrive():
@@ -90,7 +75,6 @@ def load_dataset():
         return None, False
     
     try:
-        # Read CSV with optimization for large files
         df = pd.read_csv(
             dataset_path,
             engine='c',  # Faster C engine
@@ -100,10 +84,6 @@ def load_dataset():
     except Exception as e:
         print(f"Error loading dataset: {str(e)}")
         return None, False
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
 
 def get_model_path():
     """Get correct path to model file"""
@@ -172,10 +152,6 @@ def prepare_features(df):
     
     return df[existing_columns]
 
-# ============================================================================
-# LOAD MODELS AND SCALER
-# ============================================================================
-
 @st.cache_resource
 def load_models():
     """Load pre-trained model and scaler with better error handling"""
@@ -201,9 +177,6 @@ def load_models():
 # Load models
 model, scaler, models_loaded = load_models()
 
-# ============================================================================
-# SIDEBAR NAVIGATION
-# ============================================================================
 
 st.sidebar.title("🔍 Navigation")
 page = st.sidebar.radio(
@@ -211,9 +184,6 @@ page = st.sidebar.radio(
     ["Home", "Dataset Explorer", "Single Transaction", "Batch Analysis", "Model Info"]
 )
 
-# ============================================================================
-# PAGE 1: HOME
-# ============================================================================
 
 if page == "Home":
     st.title("💳 Credit Card Fraud Detection System")
@@ -298,10 +268,6 @@ if page == "Home":
     # Footer
     st.markdown("---")
     st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
-
-# ============================================================================
-# PAGE 2: DATASET EXPLORER
-# ============================================================================
 
 elif page == "Dataset Explorer":
     st.title("🔍 Credit Card Dataset Explorer")
@@ -431,9 +397,6 @@ elif page == "Dataset Explorer":
     st.markdown("---")
     st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
 
-# ============================================================================
-# PAGE 3: SINGLE TRANSACTION PREDICTION
-# ============================================================================
 
 elif page == "Single Transaction":
     st.title("🔍 Single Transaction Fraud Detection")
@@ -555,9 +518,6 @@ elif page == "Single Transaction":
     st.markdown("---")
     st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
 
-# ============================================================================
-# PAGE 4: BATCH ANALYSIS
-# ============================================================================
 
 elif page == "Batch Analysis":
     st.title("📊 Batch Transaction Analysis")
@@ -711,10 +671,6 @@ elif page == "Batch Analysis":
     # Footer
     st.markdown("---")
     st.markdown('<div class="footer">Made by Aditya Jalgaonkar</div>', unsafe_allow_html=True)
-
-# ============================================================================
-# PAGE 5: MODEL INFORMATION
-# ============================================================================
 
 elif page == "Model Info":
     st.title("📊 Model Information & Metrics")
